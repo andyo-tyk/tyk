@@ -89,6 +89,7 @@ const (
 	Self = "self"
 
 	AuthTokenType = "authToken"
+	OAuthType     = "oauth"
 )
 
 type ObjectId bson.ObjectId

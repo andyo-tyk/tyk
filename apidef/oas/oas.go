@@ -111,6 +111,28 @@ func (s *OAS) getTykTokenAuth(name string) (token *Token) {
 	return
 }
 
+func (s *OAS) getTykOAuth(name string) (oauth *OAuth) {
+	if securitySchemes := s.getTykSecuritySchemes(); securitySchemes != nil {
+		securityScheme := securitySchemes[name]
+		if securityScheme == nil {
+			return
+		}
+
+		mapSecurityScheme, ok := securityScheme.(map[string]interface{})
+		if ok {
+			oauth = &OAuth{}
+			inBytes, _ := json.Marshal(mapSecurityScheme)
+			_ = json.Unmarshal(inBytes, oauth)
+			s.getTykSecuritySchemes()[name] = oauth
+			return
+		}
+
+		oauth = s.getTykSecuritySchemes()[name].(*OAuth)
+	}
+
+	return
+}
+
 func (s *OAS) getTykSecuritySchemes() (securitySchemes map[string]interface{}) {
 	if s.getTykAuthentication() != nil {
 		securitySchemes = s.getTykAuthentication().SecuritySchemes

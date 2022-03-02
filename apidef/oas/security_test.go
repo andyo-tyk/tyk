@@ -47,7 +47,7 @@ func TestOAS_SecurityScheme(t *testing.T) {
 	}
 
 	check := func(in, name string, ac apidef.AuthConfig, s OAS) {
-		s.fillSecurityScheme(&ac)
+		s.fillApiKeyScheme(&ac)
 
 		expectedAC := ac
 		expExtractedAC := apidef.AuthConfig{Name: authName}
@@ -181,7 +181,7 @@ func TestOAS_Token(t *testing.T) {
 	var convertedOAS OAS
 	convertedOAS.Components.SecuritySchemes = oas.Components.SecuritySchemes
 
-	convertedOAS.SetTykExtension(&XTykAPIGateway{Server: Server{Authentication: &Authentication{}}})
+	convertedOAS.SetTykExtension(&XTykAPIGateway{Server: Server{Authentication: &Authentication{SecuritySchemes: map[string]interface{}{}}}})
 	convertedOAS.fillToken(api)
 
 	assert.Equal(t, oas, convertedOAS)
@@ -212,6 +212,67 @@ func TestOAS_Token_EmptyTykAuthentication(t *testing.T) {
 
 	var convertedOAS OAS
 	convertedOAS.Fill(api)
+
+	assert.Equal(t, oas, convertedOAS)
+}
+
+func TestOAS_OAuth(t *testing.T) {
+	const securityName = "custom"
+	scopes := map[string]string{
+		"write:pets": "modify pets in your account",
+		"read:pets":  "read your pets",
+	}
+
+	var oas OAS
+	oas.Security = openapi3.SecurityRequirements{
+		{
+			securityName: []string{},
+		},
+	}
+
+	oas.Components.SecuritySchemes = openapi3.SecuritySchemes{
+		securityName: {
+			Value: &openapi3.SecurityScheme{
+				Type: oauth2,
+				Flows: &openapi3.OAuthFlows{
+					AuthorizationCode: &openapi3.OAuthFlow{
+						AuthorizationURL: "{api-url}/oauth/authorize",
+						TokenURL:         "{api-url}/oauth/token",
+						Scopes:           scopes,
+					},
+					ClientCredentials: &openapi3.OAuthFlow{
+						Scopes: scopes,
+					},
+				},
+			},
+		},
+	}
+
+	var oauth OAuth
+	Fill(t, &oauth, 0)
+	oas.Extensions = map[string]interface{}{
+		ExtensionTykAPIGateway: &XTykAPIGateway{
+			Server: Server{
+				Authentication: &Authentication{
+					SecuritySchemes: map[string]interface{}{
+						securityName: &oauth,
+					},
+				},
+			},
+		},
+	}
+
+	var api apidef.APIDefinition
+	oas.ExtractTo(&api)
+
+	var convertedOAS OAS
+	convertedOAS.Components.SecuritySchemes = oas.Components.SecuritySchemes
+	convertedOAS.Fill(api)
+	flows := convertedOAS.Components.SecuritySchemes[securityName].Value.Flows
+
+	assert.Equal(t, flows.AuthorizationCode.AuthorizationURL, "{api-url}/oauth/authorize")
+	assert.Equal(t, flows.AuthorizationCode.TokenURL, "{api-url}/oauth/token")
+	assert.Equal(t, flows.ClientCredentials.TokenURL, "/oauth/token")
 
 	assert.Equal(t, oas, convertedOAS)
 }
